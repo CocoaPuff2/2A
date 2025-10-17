@@ -1,13 +1,16 @@
-#include <setjmp.h>   // setjmp()
+#include <setjmp.h>   // setjmp(), longjmp()
 #include <signal.h>   // signal()
 #include <unistd.h>   // sleep(), alarm()
 #include <stdio.h>    // perror()
-#include <stdlib.h>   // exit()
+#include <stdlib.h>   // exit(), malloc(), free()
 #include <iostream>   // cout, cerr
 #include <string.h>   // memcpy
 #include <queue>      // queue
 
 using namespace std;
+
+// ------------------------------------------------
+// Scheduler macros
 
 // Initializes scheduler: save main env with setjmp()
 // then jump into scheduler() function
@@ -23,14 +26,12 @@ using namespace std;
         longjmp(scheduler_env, 1);         \
 }
 
-// todo
-// setjmp() already stores CPU registers and and PC
-// so, manually copy the stack memory portion.
+// Capture current stack into TCB
 #define capture() { \
     char local_var; \
-    cur_tcb->sp = (void*)&local_var;  /* Save current SP */ \
+    cur_tcb->sp = (void*)&local_var; /* Save current SP */ \
     \
-    /* compute approximate stack size, assuming stack grows downward */ \
+    /* compute stack size: assume stack grows downward */ \
     if (cur_tcb->stack_base != NULL) { \
         cur_tcb->size = (char*)cur_tcb->stack_base - (char*)cur_tcb->sp; \
         if (cur_tcb->size < 0) cur_tcb->size = -cur_tcb->size; \
@@ -43,22 +44,16 @@ using namespace std;
     memcpy(cur_tcb->stack, cur_tcb->sp, cur_tcb->size); \
 }
 
-
-// todo
 // Gives up CPU to another thread
-// 1. save current context (setjmp())
-// 2. save thead's current stack (capture())
-// 3. put thread back into queue (thr_queue.push(cur_tcb))
-// 4. jump to scheduler to pick up new thread
 #define sthread_yield() {    \
-if (setjmp(cur_tcb->env) == 0) { \
-    capture();               \
-    thr_queue.push(cur_tcb); \
-    longjmp(scheduler_env, 1);   \
-                                \
-}\
+    if (setjmp(cur_tcb->env) == 0) { \
+        capture();               \
+        thr_queue.push(cur_tcb); \
+        longjmp(scheduler_env, 1); \
+    } \
 }
 
+// Initialize a thread's environment
 #define sthread_init() {                   \
     if (setjmp(cur_tcb->env) == 0) {       \
         capture();                         \
@@ -67,56 +62,64 @@ if (setjmp(cur_tcb->env) == 0) { \
     memcpy(cur_tcb->sp, cur_tcb->stack, cur_tcb->size); \
 }
 
+// Create a new thread
 #define sthread_create(function, arguments) { \
     if (setjmp(main_env) == 0) {              \
         func = &function;                     \
         args = arguments;                     \
         thread_created = true;                \
         cur_tcb = new TCB();                  \
+        cur_tcb->stack_base = (void*)((char*)malloc(8192) + 8192); /* top of stack */ \
         longjmp(scheduler_env, 1);            \
     }                                         \
 }
 
+// Exit current thread
 #define sthread_exit() {                     \
     if (cur_tcb->stack != NULL)              \
         free(cur_tcb->stack);                \
+    if (cur_tcb->stack_base != NULL)         \
+        free((char*)cur_tcb->stack_base - 8192); /* free base allocation */ \
     longjmp(scheduler_env, 1);               \
 }
 
 // ------------------------------------------------
+// Globals
 
 static jmp_buf main_env;
 static jmp_buf scheduler_env;
 
-// thread control block (TCB)
+// Thread Control Block
 class TCB {
 public:
-    TCB() : sp(NULL), stack(NULL), size(0) { }
+    TCB() : sp(NULL), stack(NULL), stack_base(NULL), size(0) { }
 
-    jmp_buf env;   // execution environment captured by setjmp()
-    void* sp;
-    void* stack;   // buffer, stores latest stack contents
-    int size;      // size of stack contents
+    jmp_buf env;       // execution environment
+    void* sp;          // current stack pointer
+    void* stack;       // buffer to store stack contents
+    void* stack_base;  // base/top of stack
+    int size;          // size of stack contents
 };
 
 static TCB* cur_tcb = NULL;     // current thread's TCB
 static queue<TCB*> thr_queue;   // queue of active threads
 
-// alarm caught to switch to next thread
+// Alarm for preemption
 static bool alarmed = false;
-
 static void sig_alarm(int signo) {
     alarmed = true;
 }
 
-// A function to be executed by a thread
+// Thread function pointer
 void (*func)(void*);
 void* args = NULL;
 static bool thread_created = false;
 
+// ------------------------------------------------
+// Scheduler
 
 static void scheduler() {
-    // initialize scheduler
+    // Initialize scheduler
     if (setjmp(scheduler_env) == 0) {
         cerr << "scheduler: initialized" << endl;
 
@@ -128,24 +131,24 @@ static void scheduler() {
         longjmp(main_env, 1);
     }
 
-    // check if called from sthread_create()
-    if (thread_created == true) {
+    // If called from sthread_create(), run the thread
+    if (thread_created) {
         thread_created = false;
         (*func)(args);
     }
 
-    // restore the next thread's environment
-    if ((cur_tcb = thr_queue.front()) != NULL) {
+    // Get next thread from queue
+    if (!thr_queue.empty() && (cur_tcb = thr_queue.front()) != NULL) {
         thr_queue.pop();
 
         // allocate a time quantum of 5 seconds
         alarm(5);
 
-        // resume the next thread's execution
+        // resume thread execution
         longjmp(cur_tcb->env, 1);
     }
 
-    // no threads to schedule, simply return
+    // no threads left
     cerr << "scheduler: no more threads to schedule" << endl;
     longjmp(main_env, 2);
 }
