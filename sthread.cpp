@@ -28,25 +28,36 @@ using namespace std;
 // so, manually copy the stack memory portion.
 #define capture() { \
    char local_var;   /* to find stack location */ \
-   current_tcb->sp = (void*)&local_var;  /* Save current sp */ \
-   current_tcb->size = (char*)current_tcb->sp  /* ASSUME: stack grows down */ \
+   cur_tcb->sp = (void*)&local_var;  /* Save current sp */ \
+   cur_tcb->size = (char*)cur_tcb->sp  /* ASSUME: stack grows down */ \
                     \
    if (current_tcb_size < 0) {                    \
-   current_tcb->size = -current_tcb->size;         \
+   cur_tcb->size = -cur_tcb->size;         \
    }                                                \
                                                      \
-   if (current_tcb->stack != NULL) {              \
-   free(current_tcb->stack);                      \
+   if (cur_tcb->stack != NULL) {              \
+   free(cur_tcb->stack);                      \
    }                \
                     \
-   current_tcb->stack = malloc(current_tcb->size);\
-   memcpy(current_tcb->stack, current_tcb->sp, current_tcb->size);            \
+   cur_tcb->stack = malloc(cur_tcb->size);\
+   memcpy(cur_tcb->stack, cur_tcb->sp, cur_tcb->size);            \
    \
    \
 }
 
 // todo
-#define sthread_yield() {                  \
+// Gives up CPU to another thread
+// 1. save current context (setjmp())
+// 2. save thead's current stack (capture())
+// 3. put thread back into queue (thr_queue.push(cur_tcb))
+// 4. jump to scheduler to pick up new thread
+#define sthread_yield() {    \
+if (setjmp(cur_tcb->env) == 0) { \
+    capture();               \
+    thr_queue.push(cur_tcb); \
+    longjmp(scheduler_env, 1);   \
+                                \
+}\
 }
 
 #define sthread_init() {                   \
