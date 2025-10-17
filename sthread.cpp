@@ -29,7 +29,7 @@ using namespace std;
 #define capture() { \
    char local_var;   /* to find stack location */ \
    cur_tcb->sp = (void*)&local_var;  /* Save current sp */ \
-   cur_tcb->size = (char*)cur_tcb->sp  /* ASSUME: stack grows down */ \
+   cur_tcb->size = (char*)cur_tcb->sp;  /* ASSUME: stack grows down */ \
                     \
    if (current_tcb_size < 0) {                    \
    cur_tcb->size = -cur_tcb->size;         \
