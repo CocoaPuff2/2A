@@ -27,23 +27,22 @@ using namespace std;
 // setjmp() already stores CPU registers and and PC
 // so, manually copy the stack memory portion.
 #define capture() { \
-   char local_var;   /* to find stack location */ \
-   cur_tcb->sp = (void*)&local_var;  /* Save current sp */ \
-   cur_tcb->size = (char*)cur_tcb->sp;  /* ASSUME: stack grows down */ \
-                    \
-   if (current_tcb_size < 0) {                    \
-   cur_tcb->size = -cur_tcb->size;         \
-   }                                                \
-                                                     \
-   if (cur_tcb->stack != NULL) {              \
-   free(cur_tcb->stack);                      \
-   }                \
-                    \
-   cur_tcb->stack = malloc(cur_tcb->size);\
-   memcpy(cur_tcb->stack, cur_tcb->sp, cur_tcb->size);            \
-   \
-   \
+    char local_var; \
+    cur_tcb->sp = (void*)&local_var;  /* Save current SP */ \
+    \
+    /* compute approximate stack size, assuming stack grows downward */ \
+    if (cur_tcb->stack_base != NULL) { \
+        cur_tcb->size = (char*)cur_tcb->stack_base - (char*)cur_tcb->sp; \
+        if (cur_tcb->size < 0) cur_tcb->size = -cur_tcb->size; \
+    } else { \
+        cur_tcb->size = 8192; /* default max stack size if stack_base not set */ \
+    } \
+    \
+    if (cur_tcb->stack != NULL) free(cur_tcb->stack); \
+    cur_tcb->stack = malloc(cur_tcb->size); \
+    memcpy(cur_tcb->stack, cur_tcb->sp, cur_tcb->size); \
 }
+
 
 // todo
 // Gives up CPU to another thread
