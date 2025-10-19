@@ -30,10 +30,12 @@ using namespace std;
     cur_tcb->sp = sp; \
     cur_tcb->size = (int)((char*)bp - (char*)sp); \
     \
-    if (cur_tcb->stack != NULL) /* if prev stack already exists, deallocate from mem*/ \
-        free(cur_tcb->stack); \
-    \
-    cur_tcb->stack = malloc(cur_tcb->size); \
+    if (!cur_tcb->stack) { \
+        cur_tcb->stack = malloc(cur_tcb->size); \
+    } else { \
+        if (cur_tcb->size > 0) \
+            cur_tcb->stack = realloc(cur_tcb->stack, cur_tcb->size); \
+    } \
     memcpy(cur_tcb->stack, sp, cur_tcb->size); /*dest, src, cpy*/ \
     thr_queue.push(cur_tcb);                \
 }
