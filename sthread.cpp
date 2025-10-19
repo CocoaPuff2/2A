@@ -28,13 +28,14 @@ using namespace std;
     register void* sp asm("sp"); \
     register void* bp asm("bp"); \
     cur_tcb->sp = sp; \
-    cur_tcb->size = (int)((long long)bp - (long long)sp); \
+    cur_tcb->size = (int)((char*)bp - (char*)sp); \
     \
     if (cur_tcb->stack != NULL) /* if prev stack already exists, deallocate from mem*/ \
         free(cur_tcb->stack); \
     \
     cur_tcb->stack = malloc(cur_tcb->size); \
     memcpy(cur_tcb->stack, sp, cur_tcb->size); /*dest, src, cpy*/ \
+    thr_queue.push(cur_tcb);                \
 }
 
 // sthread_yield() voluntarily gives up CPU if alarmed
