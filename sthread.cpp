@@ -40,16 +40,20 @@ using namespace std;
 // sthread_yield() voluntarily gives up CPU if alarmed
 #define sthread_yield() { \
     if (alarmed) { \
+        /* Save current thread’s CPU state */ \
         if (setjmp(cur_tcb->env) == 0) { \
+            /* Save thread’s stack */ \
             capture(); \
+            /* Put back in queue */ \
             thr_queue.push(cur_tcb); \
             alarmed = false; \
+            /* Jump to scheduler, pick the next thread */ \
             longjmp(scheduler_env, 1); \
         } \
+        /* restore stack */ \
         memcpy(cur_tcb->sp, cur_tcb->stack, cur_tcb->size); \
     } \
 }
-
 
 // Only changed above here ------------------------------------------------
 #define sthread_init() {                   \
