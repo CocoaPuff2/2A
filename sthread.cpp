@@ -30,10 +30,7 @@ using namespace std;
     cur_tcb->sp = sp; \
     cur_tcb->size = (int)((char*)bp - (char*)sp); \
     \
-    /* allocate stack only if not allocated yet */ \
-    if (!cur_tcb->stack) \
-        cur_tcb->stack = malloc(cur_tcb->size); \
-    \
+    cur_tcb->stack = malloc(cur_tcb->size); \
     memcpy(cur_tcb->stack, sp, cur_tcb->size); /*dest, src, cpy*/ \
     thr_queue.push(cur_tcb);                \
 }
