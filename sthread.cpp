@@ -27,27 +27,28 @@ using namespace std;
 #define capture() { \
     register void* sp asm("sp"); \
     register void* bp asm("bp"); \
-    cur_tcb->sp = sp;            \
-    cur_tcb->size = (int)((long long)bp - (long long)sp);\
-    /* cur_tcb->size = (int)((char*)bp - (char*)sp); */ \
-    if (cur_tcb->stack != NULL) { free(cur_tcb->stack);}  /* if pre-existing stack, deallocate space*/        \
-    cur_tcb->stack = malloc(cur_tcb->stack); \
-    memcpy(cur_tcb->stack, sp, cur_tcb->size);    /* dest, src, cpy */           \
-}\
+    cur_tcb->sp = sp; \
+    cur_tcb->size = (int)((long long)bp - (long long)sp); \
+    \
+    if (cur_tcb->stack != NULL) /* if prev stack already exists, deallocate from mem*/ \
+        free(cur_tcb->stack); \
+    \
+    cur_tcb->stack = malloc(cur_tcb->size); \
+    memcpy(cur_tcb->stack, sp, cur_tcb->size); /*dest, src, cpy*/ \
+}
 
 // sthread_yield() voluntarily gives up CPU if alarmed
 #define sthread_yield() { \
-    if (alarmed) {        \
+    if (alarmed) { \
         if (setjmp(cur_tcb->env) == 0) { \
-            capture();    \
-            thr_queue.push(cur_tcb);     \
-            alarmed = false;             \
-            longjmp(scheduler_env, 1);  /*switch ctrl to scheduler that picks next thread to run  */    \
-            }\
-            memcpy(cur_tcb->sp, cur_tcb->stack, cur_tcb->size);  /* dest, src, cpy*/             \
-    }\
-   \
-}\
+            capture(); \
+            thr_queue.push(cur_tcb); \
+            alarmed = false; \
+            longjmp(scheduler_env, 1); \
+        } \
+        memcpy(cur_tcb->sp, cur_tcb->stack, cur_tcb->size); \
+    } \
+}
 
 
 // Only changed above here ------------------------------------------------
