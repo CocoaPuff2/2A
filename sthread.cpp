@@ -30,11 +30,14 @@ using namespace std;
     cur_tcb->sp = sp; \
     cur_tcb->size = (int)((char*)bp - (char*)sp); \
     \
-    /* allocate stack only if not allocated or size changed */ \
-    if (!cur_tcb->stack || cur_tcb->size != (int)((char*)bp - (char*)sp)) { \
-        cur_tcb->stack = (char*)realloc(cur_tcb->stack, cur_tcb->size); \
-    } \
-    memcpy(cur_tcb->stack, sp, cur_tcb->size); /*dest, src, cpy*/ \
+    /* allocate once or resize safely */ \
+    if (!cur_tcb->stack) \
+        cur_tcb->stack = malloc(cur_tcb->size); \
+    else if (cur_tcb->size > 0) \
+        cur_tcb->stack = realloc(cur_tcb->stack, cur_tcb->size); \
+    \
+    if (cur_tcb->stack && cur_tcb->size > 0) \
+        memcpy(cur_tcb->stack, sp, cur_tcb->size); \
     thr_queue.push(cur_tcb);                \
 }
 
