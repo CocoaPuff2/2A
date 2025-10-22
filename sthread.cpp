@@ -30,7 +30,7 @@ using namespace std;
     cur_tcb->sp = sp; \
     cur_tcb->size = (int)((char*)bp - (char*)sp); \
     \
-    /* Allocate the stack once (no freeing, no realloc) */ \
+    /* Allocate the stack once (no freeing or re-allocation) */ \
     if (cur_tcb->stack == NULL && cur_tcb->size > 0) { \
         cur_tcb->stack = malloc(cur_tcb->size); \
     } \
@@ -39,7 +39,7 @@ using namespace std;
         memcpy(cur_tcb->stack, sp, cur_tcb->size); \
     } \
     \
-    /* Avoid duplicate push: only push if not already queued */ \
+    /* Avoid duplicate, only push if not already queued!! */ \
     if (thr_queue.empty() || thr_queue.back() != cur_tcb) { \
         thr_queue.push(cur_tcb); \
     } \
@@ -53,7 +53,7 @@ using namespace std;
             alarmed = false; \
             longjmp(scheduler_env, 1); \
         } \
-        /* Restore this thread's stack after returning */ \
+        /* Restore thread's stack after returning */ \
         if (cur_tcb->stack && cur_tcb->size > 0) { \
             memcpy(cur_tcb->sp, cur_tcb->stack, cur_tcb->size); \
         } \
