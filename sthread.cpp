@@ -30,34 +30,36 @@ using namespace std;
     cur_tcb->sp = sp; \
     cur_tcb->size = (int)((char*)bp - (char*)sp); \
     \
-    /* allocate once or resize safely */ \
-    if (!cur_tcb->stack) \
+    /* Allocate the stack once (no freeing, no realloc) */ \
+    if (cur_tcb->stack == NULL && cur_tcb->size > 0) { \
         cur_tcb->stack = malloc(cur_tcb->size); \
-    else if (cur_tcb->size > 0) \
-        cur_tcb->stack = realloc(cur_tcb->stack, cur_tcb->size); \
+    } \
     \
-    if (cur_tcb->stack && cur_tcb->size > 0) \
+    if (cur_tcb->stack && cur_tcb->size > 0) { \
         memcpy(cur_tcb->stack, sp, cur_tcb->size); \
-    thr_queue.push(cur_tcb);                \
+    } \
+    \
+    /* Avoid duplicate push: only push if not already queued */ \
+    if (thr_queue.empty() || thr_queue.back() != cur_tcb) { \
+        thr_queue.push(cur_tcb); \
+    } \
 }
 
 // sthread_yield() voluntarily gives up CPU if alarmed
 #define sthread_yield() { \
     if (alarmed) { \
-        /* Save current thread’s CPU state */ \
         if (setjmp(cur_tcb->env) == 0) { \
-            /* Save thread’s stack */ \
             capture(); \
-            /* Put back in queue */ \
-            thr_queue.push(cur_tcb); \
             alarmed = false; \
-            /* Jump to scheduler, pick the next thread */ \
             longjmp(scheduler_env, 1); \
         } \
-        /* restore stack */ \
-        memcpy(cur_tcb->sp, cur_tcb->stack, cur_tcb->size); \
+        /* Restore this thread's stack after returning */ \
+        if (cur_tcb->stack && cur_tcb->size > 0) { \
+            memcpy(cur_tcb->sp, cur_tcb->stack, cur_tcb->size); \
+        } \
     } \
 }
+
 
 // Only changed above here ------------------------------------------------
 #define sthread_init() {                   \
